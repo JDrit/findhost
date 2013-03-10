@@ -7,7 +7,7 @@ import paramiko
 import sys
 
 
-def matchHosts(hostlist, username, threshold, filt, password=None):
+def matchHosts(hostlist, username, threshold, timeout, filt, password=None):
     ''' Perform an action on hosts
 
     SSHs into each host and performs a given filter based on its current load
@@ -17,13 +17,16 @@ def matchHosts(hostlist, username, threshold, filt, password=None):
 
     for host in (line for line in (line.split("#")[0].strip() for line in open(hostlist)) if line):
         try:
-            ssh.connect(host, username=username, password=password)
+            ssh.connect(host, username=username, password=password, timeout=timeout)
         except paramiko.AuthenticationException:
 	    print "Error: username and password incorrect"
 	    username = raw_input("Username: ")
 	    password = getpass.getpass()
-	    matchHosts(hostlist, username, threshold, filt, password)
+	    matchHosts(hostlist, username, threshold, timeout, filt, password)
 	    return
+	except Exception as e:
+	    print "Error: unknown exception cause by trying to connecto to " + host + ", host does not exist"
+	    continue
 
         stdin, stdout, stderr = ssh.exec_command("cat /proc/loadavg")
         load = float(stdout.read().split()[2])
@@ -60,9 +63,10 @@ def main():
                         help='The machine load threshold')
     parser.add_argument('-q', '--query', action="store_true",
                         help='Query all machines')
+    parser.add_argument('-o', '--timeout', type=float, default=20.0, help='The default timeout for the ssh connections')
     parser.add_argument('hostlist', type=str, help='The host list to examine')
     args = parser.parse_args()
-    matchHosts(args.hostlist, args.user, args.threshold,
+    matchHosts(args.hostlist, args.user, args.threshold, args.timeout,
                printAll if args.query else printSSH)
 
 if __name__ == "__main__":
